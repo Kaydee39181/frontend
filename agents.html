@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Agents</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">👥</div>
+        <div>
+          <div class="brand-title">Agents</div>
+          <div class="brand-sub">Unique agents list (respects date range) 😮‍💨</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a class="navlink" href="/dashboard/{{file_id}}">Back ↩️</a>
+      </nav>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <div class="card-head">
+          <h2>Search Agents</h2>
+          <div class="stats">
+            <div class="stat">
+              <div class="stat-label">Found</div>
+              <div class="stat-value" id="agentCount">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Date column</div>
+              <div class="stat-value" id="dateColAgents">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filters">
+          <div class="field">
+            <label>Agent name</label>
+            <input id="agentSearch" placeholder="Type agent name..." />
+          </div>
+
+          <div class="field">
+            <label>Start date</label>
+            <input id="startDateAgents" type="date" />
+          </div>
+
+          <div class="field">
+            <label>End date</label>
+            <input id="endDateAgents" type="date" />
+          </div>
+
+          <div class="actions">
+            <button class="btn" id="agentsApplyBtn">Apply</button>
+            <button class="btn btn-ghost" id="agentsResetBtn">Reset</button>
+          </div>
+        </div>
+
+        <ul class="agent-list" id="agentList"></ul>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    window.FILE_ID = params.get("file_id");
+    window.PAGE = "agents";
+  </script>
+
+  <script>
+    document.getElementById("backLink").href = `dashboard.html?file_id=${window.FILE_ID}`;
+  </script>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

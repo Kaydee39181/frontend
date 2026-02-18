@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">📊</div>
+        <div>
+          <div class="brand-title">Dashboard</div>
+          <div class="brand-sub">Date picker + cleanup-on-demand 😤✨</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a class="navlink" href="agents.html?file_id=" id="agentsLink">Agents 👤</a>
+        <a class="navlink" href="/">Upload New 🔁</a>
+
+      </nav>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <div class="card-head">
+          <h2>Filters</h2>
+          <div class="stats">
+            <div class="stat">
+              <div class="stat-label">Results</div>
+              <div class="stat-value" id="count">0</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Page</div>
+              <div class="stat-value"><span id="pageNow">1</span>/<span id="pageTotal">1</span></div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Date column</div>
+              <div class="stat-value" id="dateCol">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filters">
+          <div class="field">
+            <label>Column</label>
+            <select id="columnSelect"></select>
+          </div>
+
+          <div class="field">
+            <label>Match mode</label>
+            <select id="modeSelect">
+              <option value="contains">contains</option>
+              <option value="equals">equals</option>
+              <option value="startswith">starts with</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Search value</label>
+            <input id="valueInput" placeholder="Type something…" />
+          </div>
+
+          <div class="field">
+            <label>Page size</label>
+            <select id="pageSize">
+              <option>10</option>
+              <option selected>25</option>
+              <option>50</option>
+              <option>100</option>
+              <option>200</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Start date</label>
+            <input id="startDate" type="date" />
+          </div>
+
+          <div class="field">
+            <label>End date</label>
+            <input id="endDate" type="date" />
+          </div>
+
+          <div class="actions">
+            <button class="btn" id="filterBtn">Apply</button>
+            <button class="btn btn-ghost" id="resetBtn">Reset</button>
+          </div>
+        </div>
+
+        <div class="chips-wrap">
+          <div class="chips-title">Quick columns</div>
+          <div class="chips" id="chips"></div>
+        </div>
+
+        <div class="toolbar">
+          <div class="pager">
+            <button class="btn btn-ghost" id="prevBtn">← Prev</button>
+            <button class="btn btn-ghost" id="nextBtn">Next →</button>
+          </div>
+
+          <div class="export">
+            <button class="btn btn-ghost" id="exportCsv">Export CSV</button>
+            <button class="btn" id="exportXlsx">Export XLSX</button>
+          </div>
+        </div>
+
+        <p class="hint">💡 Date picker is bounded to dates inside your file (when a date column exists).</p>
+      </section>
+
+      <section class="card table-card">
+        <div class="table-wrap">
+          <table id="dataTable"></table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    window.FILE_ID = params.get("file_id");
+    window.PAGE = "dashboard";
+  </script>
+
+  <script>
+    document.getElementById("agentsLink").href = `agents.html?file_id=${window.FILE_ID}`;
+  </script>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
