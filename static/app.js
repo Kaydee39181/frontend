@@ -1,6 +1,6 @@
 function qs(id){ return document.getElementById(id); }
 
-const API_BASE = "https://backend-oaaq.onrender.com";
+const API_BASE = window.API_BASE || "https://backend-oaaq.onrender.com";
 
 async function uploadFile() {
   const fileInput = qs("fileInput");
@@ -19,18 +19,28 @@ async function uploadFile() {
   status.textContent = "Uploading... ⏳";
   status.className = "status";
 
-  const res = await fetch(`${API_BASE}/api/upload`, { method: "POST", body: formData });
-  const data = await res.json();
+  try {
+    const res = await fetch(`${API_BASE}/api/upload`, { method: "POST", body: formData });
+    let data = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
 
-  if (!res.ok) {
-    status.textContent = data.error || "Upload failed";
+    if (!res.ok) {
+      status.textContent = data.error || "Upload failed";
+      status.className = "status bad";
+      return;
+    }
+
+    status.textContent = "Uploaded ✅ Redirecting...";
+    status.className = "status good";
+    window.location.href = `dashboard.html?file_id=${data.file_id}`;
+  } catch {
+    status.textContent = "Upload failed. Backend may be sleeping, unavailable, or blocked by CORS.";
     status.className = "status bad";
-    return;
   }
-
-  status.textContent = "Uploaded ✅ Redirecting...";
-  status.className = "status good";
-  window.location.href = `dashboard.html?file_id=${data.file_id}`;
 
 }
 
