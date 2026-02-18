@@ -1,6 +1,6 @@
 function qs(id){ return document.getElementById(id); }
 
-const API_BASE = window.API_BASE || "http://127.0.0.1:5000";
+const API_BASE = "https://backend-oaaq.onrender.com";
 
 async function uploadFile() {
   const fileInput = qs("fileInput");
