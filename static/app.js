@@ -5,18 +5,25 @@ const API_BASE = window.API_BASE || "https://backend-oaaq.onrender.com";
 async function uploadFile() {
   const fileInput = qs("fileInput");
   const status = qs("status");
-  const file = fileInput.files[0];
+  const files = Array.from(fileInput.files || []);
 
-  if (!file) {
-    status.textContent = "Pick a file first 😭";
+  if (files.length < 1) {
+    status.textContent = "Pick at least 1 file 😭";
+    status.className = "status bad";
+    return;
+  }
+  if (files.length > 5) {
+    status.textContent = "You can upload max 5 files.";
     status.className = "status bad";
     return;
   }
 
   const formData = new FormData();
-  formData.append("file", file);
+  for (const file of files) {
+    formData.append("files", file);
+  }
 
-  status.textContent = "Uploading... ⏳";
+  status.textContent = `Uploading ${files.length} file${files.length === 1 ? "" : "s"}... ⏳`;
   status.className = "status";
 
   try {
@@ -34,7 +41,7 @@ async function uploadFile() {
       return;
     }
 
-    status.textContent = "Uploaded ✅ Redirecting...";
+    status.textContent = `Uploaded ${data.file_count || files.length} file${(data.file_count || files.length) === 1 ? "" : "s"} ✅ Redirecting...`;
     status.className = "status good";
     window.location.href = `dashboard.html?file_id=${data.file_id}`;
   } catch {
