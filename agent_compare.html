@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Agent Compare</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="icon" type="image/x-icon" href="app.ico">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🆚</div>
+        <div>
+          <div class="brand-title">Agent Compare</div>
+          <div class="brand-sub">Upload agent contact list + compare against transactions</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a class="navlink" href="dashboard.html?file_id=" id="backLink">Back to Dashboard ↩️</a>
+        <a class="navlink" href="agents.html?file_id=" id="agentsLink">Agents 👤</a>
+      </nav>
+    </header>
+
+    <main class="grid">
+      <section class="card hero">
+        <h1>Compare Agent Activity 📉</h1>
+        <p class="muted">
+          Upload a single <b>.xlsx</b> or <b>.csv</b> file with at least 2 columns:
+          one for <b>agent name</b> and one for <b>phone number</b>.
+        </p>
+
+        <div class="upload-row">
+          <input id="compareFileInput" type="file" accept=".xlsx,.csv" />
+          <button class="btn" id="compareUploadBtn">Upload + Compare</button>
+        </div>
+
+        <div class="status" id="compareStatus">Waiting for compare file…</div>
+        <p class="hint" id="compareSummary"></p>
+
+        <div class="tips">
+          <div class="chip">✅ Returns agents inactive for the last 7 days</div>
+          <div class="chip">✅ Adds full last-seen date in English</div>
+          <div class="chip">✅ Missing agents marked as "2025 and below (or beyond)"</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    window.FILE_ID = params.get("file_id");
+    window.PAGE = "agent_compare";
+  </script>
+
+  <script>
+    document.getElementById("backLink").href = `dashboard.html?file_id=${window.FILE_ID}`;
+    document.getElementById("agentsLink").href = `agents.html?file_id=${window.FILE_ID}`;
+  </script>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -270,6 +270,94 @@ function resetAgents() {
   queryAgents();
 }
 
+// ---------- Agent Compare page ----------
+function parseFilenameFromHeader(disposition) {
+  if (!disposition) return null;
+  const m = disposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i);
+  if (!m || !m[1]) return null;
+  return decodeURIComponent(m[1].replace(/"/g, "").trim());
+}
+
+async function uploadAndCompareAgents() {
+  const input = qs("compareFileInput");
+  const status = qs("compareStatus");
+  const summary = qs("compareSummary");
+  const file = input && input.files ? input.files[0] : null;
+
+  if (!file) {
+    status.textContent = "Pick a compare file first 😭";
+    status.className = "status bad";
+    return;
+  }
+
+  const lower = file.name.toLowerCase();
+  if (!(lower.endsWith(".xlsx") || lower.endsWith(".csv"))) {
+    status.textContent = "Compare file must be .xlsx or .csv";
+    status.className = "status bad";
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  status.textContent = "Uploading compare file... ⏳";
+  status.className = "status";
+  if (summary) summary.textContent = "";
+
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), 60000);
+
+  try {
+    const res = await fetch(`${API_BASE}/api/agent-compare/${window.FILE_ID}`, {
+      method: "POST",
+      body: formData,
+      signal: controller.signal
+    });
+    clearTimeout(t);
+
+    if (!res.ok) {
+      const text = await res.text();
+      let data = {};
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+      status.textContent = data.error || `Compare failed (${res.status})`;
+      status.className = "status bad";
+      return;
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const filename = parseFilenameFromHeader(disposition) || "inactive_agents_compare.xlsx";
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => window.URL.revokeObjectURL(url), 2000);
+
+    const compared = res.headers.get("X-Compare-Agents");
+    const inactive = res.headers.get("X-Inactive-Agents");
+    status.textContent = "Compare complete ✅ Download started.";
+    status.className = "status good";
+    if (summary) {
+      if (compared && inactive) {
+        summary.textContent = `Compared ${compared} agent(s). Found ${inactive} inactive/not-found agent(s).`;
+      } else {
+        summary.textContent = "Report downloaded.";
+      }
+    }
+  } catch (err) {
+    clearTimeout(t);
+    status.textContent =
+      err.name === "AbortError"
+        ? "Compare timed out 😭 (backend not responding)"
+        : `Compare crashed: ${err.message}`;
+    status.className = "status bad";
+  }
+}
+
 // ---------- Boot ----------
 document.addEventListener("DOMContentLoaded", async () => {
   // upload page
@@ -320,5 +408,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     queryAgents();
+  }
+
+  // agent compare
+  if (window.FILE_ID && window.PAGE === "agent_compare") {
+    const compareBtn = document.getElementById("compareUploadBtn");
+    if (compareBtn) compareBtn.addEventListener("click", uploadAndCompareAgents);
   }
 });

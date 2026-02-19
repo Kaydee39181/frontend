@@ -19,6 +19,7 @@
 
       <nav class="nav">
         <a class="navlink" href="agents.html?file_id=" id="agentsLink">Agents 👤</a>
+        <a class="navlink" href="agent_compare.html?file_id=" id="compareLink">Agent Compare 🆚</a>
         <a class="navlink" href="/">Upload New 🔁</a>
 
       </nav>
@@ -127,6 +128,7 @@
 
   <script>
     document.getElementById("agentsLink").href = `agents.html?file_id=${window.FILE_ID}`;
+    document.getElementById("compareLink").href = `agent_compare.html?file_id=${window.FILE_ID}`;
   </script>
 
   <script src="/static/app.js"></script>
