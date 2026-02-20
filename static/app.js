@@ -4,7 +4,43 @@ const API_BASE =
   window.API_BASE ||
   "https://backend-oaaq.onrender.com";
 
-async function uploadFile() {
+const UPLOAD_TIMEOUT_MS = Number(window.UPLOAD_TIMEOUT_MS || 120000);
+const COMPARE_TIMEOUT_MS = Number(window.COMPARE_TIMEOUT_MS || 120000);
+const WARMUP_TIMEOUT_MS = Number(window.WARMUP_TIMEOUT_MS || 45000);
+
+let warmupPromise = null;
+let backendWarm = false;
+
+function isRetryableNetworkError(err) {
+  const msg = String(err && err.message ? err.message : "").toLowerCase();
+  return err?.name === "AbortError" || msg.includes("failed to fetch") || msg.includes("networkerror");
+}
+
+async function warmupBackend() {
+  if (backendWarm) return true;
+  if (warmupPromise) return warmupPromise;
+
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), WARMUP_TIMEOUT_MS);
+
+  warmupPromise = fetch(`${API_BASE}/health`, {
+    method: "GET",
+    signal: controller.signal
+  })
+    .then((res) => {
+      backendWarm = !!(res && res.ok);
+      return backendWarm;
+    })
+    .catch(() => false)
+    .finally(() => {
+      clearTimeout(t);
+      warmupPromise = null;
+    });
+
+  return warmupPromise;
+}
+
+async function uploadFile(attempt = 1) {
   const fileInput = qs("fileInput");
   const status = qs("status");
   const files = Array.from(fileInput.files || []);
@@ -27,9 +63,9 @@ async function uploadFile() {
   status.textContent = `Uploading ${files.length} file${files.length > 1 ? "s" : ""}... ⏳`;
   status.className = "status";
 
-  // ✅ timeout protection (30s)
+  // timeout protection for slow/cold backend starts
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), 30000);
+  const t = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
 
   try {
     const res = await fetch(`${API_BASE}/api/upload`, {
@@ -59,9 +95,17 @@ async function uploadFile() {
   } catch (err) {
     clearTimeout(t);
     console.error(err);
+
+    if (attempt === 1 && isRetryableNetworkError(err)) {
+      status.textContent = "Backend is waking up... retrying once ⏳";
+      status.className = "status";
+      await warmupBackend();
+      return uploadFile(2);
+    }
+
     status.textContent =
       err.name === "AbortError"
-        ? "Upload timed out 😭 (backend not responding)"
+        ? `Upload timed out after ${Math.round(UPLOAD_TIMEOUT_MS / 1000)}s 😭 (backend not responding)`
         : `Upload crashed: ${err.message}`;
     status.className = "status bad";
   }
@@ -388,7 +432,7 @@ function syncActivityTimeframeControls() {
   }
 }
 
-async function uploadAndCompareAgents() {
+async function uploadAndCompareAgents(attempt = 1) {
   const input = qs("compareFileInput");
   const status = qs("compareStatus");
   const summary = qs("compareSummary");
@@ -429,7 +473,7 @@ async function uploadAndCompareAgents() {
   COMPARE_STATE.activityReportId = null;
 
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), 60000);
+  const t = setTimeout(() => controller.abort(), COMPARE_TIMEOUT_MS);
 
   try {
     const res = await fetch(`${API_BASE}/api/agent-compare/${window.FILE_ID}`, {
@@ -478,9 +522,17 @@ async function uploadAndCompareAgents() {
     }
   } catch (err) {
     clearTimeout(t);
+
+    if (attempt === 1 && isRetryableNetworkError(err)) {
+      status.textContent = "Backend is waking up... retrying compare once ⏳";
+      status.className = "status";
+      await warmupBackend();
+      return uploadAndCompareAgents(2);
+    }
+
     status.textContent =
       err.name === "AbortError"
-        ? "Compare timed out 😭 (backend not responding)"
+        ? `Compare timed out after ${Math.round(COMPARE_TIMEOUT_MS / 1000)}s 😭 (backend not responding)`
         : `Compare crashed: ${err.message}`;
     status.className = "status bad";
   }
@@ -669,7 +721,10 @@ async function downloadMonthlyActivityReport() {
 document.addEventListener("DOMContentLoaded", async () => {
   // upload page
   const uploadBtn = document.getElementById("uploadBtn");
-  if (uploadBtn) uploadBtn.addEventListener("click", uploadFile);
+  if (uploadBtn) {
+    uploadBtn.addEventListener("click", uploadFile);
+    warmupBackend();
+  }
 
   // dashboard
   if (window.FILE_ID && window.PAGE === "dashboard") {
@@ -719,6 +774,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // agent compare
   if (window.FILE_ID && window.PAGE === "agent_compare") {
+    warmupBackend();
     const compareBtn = document.getElementById("compareUploadBtn");
     const downloadBtn = document.getElementById("compareDownloadBtn");
     const activityGenerateBtn = document.getElementById("activityGenerateBtn");
