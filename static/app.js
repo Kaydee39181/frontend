@@ -4,9 +4,9 @@ const API_BASE =
   window.API_BASE ||
   "https://backend-oaaq.onrender.com";
 
-const UPLOAD_TIMEOUT_MS = Number(window.UPLOAD_TIMEOUT_MS || 120000);
-const COMPARE_TIMEOUT_MS = Number(window.COMPARE_TIMEOUT_MS || 120000);
-const WARMUP_TIMEOUT_MS = Number(window.WARMUP_TIMEOUT_MS || 45000);
+const UPLOAD_TIMEOUT_MS = Number(window.UPLOAD_TIMEOUT_MS || 300000);
+const COMPARE_TIMEOUT_MS = Number(window.COMPARE_TIMEOUT_MS || 300000);
+const WARMUP_TIMEOUT_MS = Number(window.WARMUP_TIMEOUT_MS || 90000);
 
 let warmupPromise = null;
 let backendWarm = false;
@@ -59,6 +59,12 @@ async function uploadFile(attempt = 1) {
 
   const formData = new FormData();
   files.forEach((f) => formData.append("files", f));
+
+  if (!backendWarm) {
+    status.textContent = "Waking backend first... ⏳";
+    status.className = "status";
+    await warmupBackend();
+  }
 
   status.textContent = `Uploading ${files.length} file${files.length > 1 ? "s" : ""}... ⏳`;
   status.className = "status";
@@ -460,6 +466,12 @@ async function uploadAndCompareAgents(attempt = 1) {
 
   const formData = new FormData();
   formData.append("file", file);
+
+  if (!backendWarm) {
+    status.textContent = "Waking backend first... ⏳";
+    status.className = "status";
+    await warmupBackend();
+  }
 
   status.textContent = "Uploading compare file... ⏳";
   status.className = "status";
