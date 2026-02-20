@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    { "source": "/dashboard/:file_id", "destination": "/dashboard.html?file_id=:file_id" },
+    { "source": "/agents/:file_id", "destination": "/agents.html?file_id=:file_id" },
+    { "source": "/agent-compare/:file_id", "destination": "/agent_compare.html?file_id=:file_id" },
+    { "source": "/compare/:file_id", "destination": "/agent_compare.html?file_id=:file_id" },
+    { "source": "/dashboard", "destination": "/dashboard.html" },
+    { "source": "/agents", "destination": "/agents.html" },
+    { "source": "/agent-compare", "destination": "/agent_compare.html" },
+    { "source": "/compare", "destination": "/agent_compare.html" }
+  ]
+}

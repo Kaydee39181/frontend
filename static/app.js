@@ -1,55 +1,72 @@
 function qs(id){ return document.getElementById(id); }
 
-const API_BASE ="https://backend-oaaq.onrender.com";
+const API_BASE =
+  window.API_BASE ||
+  "https://backend-oaaq.onrender.com";
 
 async function uploadFile() {
   const fileInput = qs("fileInput");
   const status = qs("status");
   const files = Array.from(fileInput.files || []);
 
-  if (files.length < 1) {
-    status.textContent = "Pick at least 1 file 😭";
+  if (files.length === 0) {
+    status.textContent = "Pick a file first 😭";
     status.className = "status bad";
     return;
   }
+
   if (files.length > 5) {
-    status.textContent = "You can upload max 5 files.";
+    status.textContent = "Upload up to 5 files at once 🙏";
     status.className = "status bad";
     return;
   }
 
   const formData = new FormData();
-  for (const file of files) {
-    formData.append("files", file);
-  }
+  files.forEach((f) => formData.append("files", f));
 
-  status.textContent = `Uploading ${files.length} file${files.length === 1 ? "" : "s"}... ⏳`;
+  status.textContent = `Uploading ${files.length} file${files.length > 1 ? "s" : ""}... ⏳`;
   status.className = "status";
 
+  // ✅ timeout protection (30s)
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), 30000);
+
   try {
-    const res = await fetch(`${API_BASE}/api/upload`, { method: "POST", body: formData });
+    const res = await fetch(`${API_BASE}/api/upload`, {
+      method: "POST",
+      body: formData,
+      signal: controller.signal
+    });
+
+    clearTimeout(t);
+
+    const text = await res.text(); // read raw
     let data = {};
-    try {
-      data = await res.json();
-    } catch {
-      data = {};
-    }
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
 
     if (!res.ok) {
-      status.textContent = data.error || "Upload failed";
+      status.textContent = data.error || `Upload failed (${res.status})`;
       status.className = "status bad";
+      console.error("Upload error:", data);
       return;
     }
 
-    status.textContent = `Uploaded ${data.file_count || files.length} file${(data.file_count || files.length) === 1 ? "" : "s"} ✅ Redirecting...`;
+    const uploadedCount = Number(data.uploaded_files || files.length);
+    status.textContent = `Uploaded ${uploadedCount} file${uploadedCount > 1 ? "s" : ""} ✅ Redirecting...`;
     status.className = "status good";
-    window.location.href = `dashboard.html?file_id=${data.file_id}`;
-  } catch {
-    status.textContent = "Upload failed. Backend may be sleeping, unavailable, or blocked by CORS.";
+
+    window.location.href = `dashboard.html?file_id=${encodeURIComponent(data.file_id)}`;
+  } catch (err) {
+    clearTimeout(t);
+    console.error(err);
+    status.textContent =
+      err.name === "AbortError"
+        ? "Upload timed out 😭 (backend not responding)"
+        : `Upload crashed: ${err.message}`;
     status.className = "status bad";
   }
-
 }
+
 
 // ---------- Table ----------
 function renderTable(rows) {
@@ -256,7 +273,7 @@ async function queryAgents() {
     li.className = "agent-item";
     li.textContent = a;
     li.addEventListener("click", () => {
-      const url = `dashboard.html?file_id=${window.FILE_ID}&agent=${encodeURIComponent(a)}`;
+      const url = `dashboard.html?file_id=${encodeURIComponent(window.FILE_ID)}&agent=${encodeURIComponent(a)}`;
       window.location.href = url;
     });
     list.appendChild(li);
@@ -278,10 +295,110 @@ function parseFilenameFromHeader(disposition) {
   return decodeURIComponent(m[1].replace(/"/g, "").trim());
 }
 
+const COMPARE_STATE = {
+  reportId: null,
+  activityReportId: null
+};
+
+function renderRowsInTable(tableId, rows, emptyMessage) {
+  const table = qs(tableId);
+  if (!table) return;
+
+  table.innerHTML = "";
+  if (!rows || rows.length === 0) {
+    table.innerHTML = `<tr><td class='empty'>${emptyMessage}</td></tr>`;
+    return;
+  }
+
+  const columns = Object.keys(rows[0]);
+  if (columns.includes("S/N")) {
+    columns.sort((a, b) => {
+      if (a === "S/N") return -1;
+      if (b === "S/N") return 1;
+      return 0;
+    });
+  }
+
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  columns.forEach(col => {
+    const th = document.createElement("th");
+    th.textContent = col;
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
+    columns.forEach(col => {
+      const td = document.createElement("td");
+      td.textContent = r[col] ?? "";
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+}
+
+function renderComparePreview(rows) {
+  renderRowsInTable("comparePreviewTable", rows, "No inactive businesses found in this run.");
+}
+
+function renderActivityPreview(rows) {
+  renderRowsInTable("activityPreviewTable", rows, "No businesses match this month/filter.");
+}
+
+function dateToYmd(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function syncActivityTimeframeControls() {
+  const mode = (qs("activityTimeframeMode")?.value || "month").toLowerCase();
+  const monthWrap = qs("activityMonthWrap");
+  const customWrapStart = qs("activityCustomWrap");
+  const customWrapEnd = qs("activityCustomWrapEnd");
+  const monthInput = qs("activityMonth");
+  const startInput = qs("activityStartDate");
+  const endInput = qs("activityEndDate");
+
+  if (monthWrap) monthWrap.hidden = mode !== "month";
+  if (customWrapStart) customWrapStart.hidden = mode !== "custom";
+  if (customWrapEnd) customWrapEnd.hidden = mode !== "custom";
+  if (monthInput) monthInput.disabled = mode !== "month";
+  if (startInput) startInput.disabled = mode !== "custom";
+  if (endInput) endInput.disabled = mode !== "custom";
+
+  if (mode === "month") {
+    if (monthInput && !monthInput.value) {
+      const now = new Date();
+      monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    }
+  } else {
+    if (startInput && endInput && (!startInput.value || !endInput.value)) {
+      const today = new Date();
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      startInput.value = dateToYmd(firstDay);
+      endInput.value = dateToYmd(today);
+    }
+  }
+}
+
 async function uploadAndCompareAgents() {
   const input = qs("compareFileInput");
   const status = qs("compareStatus");
   const summary = qs("compareSummary");
+  const previewCard = qs("comparePreviewCard");
+  const downloadBtn = qs("compareDownloadBtn");
+  const activityCard = qs("monthlyActivityCard");
+  const activitySummary = qs("activitySummary");
+  const activityGenerateBtn = qs("activityGenerateBtn");
+  const activityDownloadBtn = qs("activityDownloadBtn");
+  const activityMonth = qs("activityMonth");
   const file = input && input.files ? input.files[0] : null;
 
   if (!file) {
@@ -303,6 +420,13 @@ async function uploadAndCompareAgents() {
   status.textContent = "Uploading compare file... ⏳";
   status.className = "status";
   if (summary) summary.textContent = "";
+  if (downloadBtn) downloadBtn.disabled = true;
+  if (activitySummary) activitySummary.textContent = "";
+  if (activityDownloadBtn) activityDownloadBtn.disabled = true;
+  if (activityGenerateBtn) activityGenerateBtn.disabled = true;
+  renderActivityPreview([]);
+  COMPARE_STATE.reportId = null;
+  COMPARE_STATE.activityReportId = null;
 
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), 60000);
@@ -324,9 +448,70 @@ async function uploadAndCompareAgents() {
       return;
     }
 
+    const data = await res.json();
+    COMPARE_STATE.reportId = data.report_id || null;
+    if (downloadBtn) downloadBtn.disabled = !COMPARE_STATE.reportId;
+    if (activityGenerateBtn) activityGenerateBtn.disabled = !COMPARE_STATE.reportId;
+    if (activityDownloadBtn) activityDownloadBtn.disabled = true;
+    COMPARE_STATE.activityReportId = null;
+
+    if (previewCard) previewCard.hidden = false;
+    if (activityCard) activityCard.hidden = false;
+    if (activityMonth && !activityMonth.value) {
+      const now = new Date();
+      activityMonth.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    }
+    syncActivityTimeframeControls();
+    renderComparePreview(data.preview_rows || []);
+
+    const compared = Number(data.compared_count || 0);
+    const inactive = Number(data.inactive_count || 0);
+    const previewShown = Math.min(Number(data.preview_limit || 0), Number(data.preview_total || 0));
+
+    status.textContent = "Compare complete ✅ Preview generated below.";
+    status.className = "status good";
+    if (summary) {
+      const previewText = data.preview_total > previewShown
+        ? ` Showing first ${previewShown} row(s).`
+        : "";
+      summary.textContent = `Compared ${compared} businesses. Found ${inactive} inactive/not-seen businesses.${previewText}`;
+    }
+  } catch (err) {
+    clearTimeout(t);
+    status.textContent =
+      err.name === "AbortError"
+        ? "Compare timed out 😭 (backend not responding)"
+        : `Compare crashed: ${err.message}`;
+    status.className = "status bad";
+  }
+}
+
+async function downloadCompareReport() {
+  const status = qs("compareStatus");
+  const reportId = COMPARE_STATE.reportId;
+  if (!reportId) {
+    status.textContent = "Run compare first to generate a downloadable report.";
+    status.className = "status bad";
+    return;
+  }
+
+  status.textContent = "Preparing download... ⏳";
+  status.className = "status";
+
+  try {
+    const res = await fetch(`${API_BASE}/api/agent-compare-download/${window.FILE_ID}/${reportId}`);
+    if (!res.ok) {
+      const text = await res.text();
+      let data = {};
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+      status.textContent = data.error || `Download failed (${res.status})`;
+      status.className = "status bad";
+      return;
+    }
+
     const blob = await res.blob();
     const disposition = res.headers.get("Content-Disposition") || "";
-    const filename = parseFilenameFromHeader(disposition) || "inactive_agents_compare.xlsx";
+    const filename = parseFilenameFromHeader(disposition) || "inactive_businesses.xlsx";
     const url = window.URL.createObjectURL(blob);
 
     const a = document.createElement("a");
@@ -337,23 +522,145 @@ async function uploadAndCompareAgents() {
     a.remove();
     setTimeout(() => window.URL.revokeObjectURL(url), 2000);
 
-    const compared = res.headers.get("X-Compare-Agents");
-    const inactive = res.headers.get("X-Inactive-Agents");
-    status.textContent = "Compare complete ✅ Download started.";
+    status.textContent = "Download started ✅";
+    status.className = "status good";
+  } catch (err) {
+    status.textContent = `Download failed: ${err.message}`;
+    status.className = "status bad";
+  }
+}
+
+async function generateMonthlyActivityPreview() {
+  const status = qs("compareStatus");
+  const summary = qs("activitySummary");
+  const modeInput = qs("activityTimeframeMode");
+  const monthInput = qs("activityMonth");
+  const startInput = qs("activityStartDate");
+  const endInput = qs("activityEndDate");
+  const typeInput = qs("activityType");
+  const downloadBtn = qs("activityDownloadBtn");
+
+  const reportId = COMPARE_STATE.reportId;
+  if (!reportId) {
+    status.textContent = "Run compare first before generating monthly activity.";
+    status.className = "status bad";
+    return;
+  }
+
+  const timeframe_mode = (modeInput ? (modeInput.value || "month") : "month").toLowerCase();
+  const month = monthInput ? (monthInput.value || "") : "";
+  const start_date = startInput ? (startInput.value || "") : "";
+  const end_date = endInput ? (endInput.value || "") : "";
+  const activity_type = typeInput ? (typeInput.value || "all") : "all";
+  if (timeframe_mode === "month") {
+    if (!month) {
+      status.textContent = "Select a month first.";
+      status.className = "status bad";
+      return;
+    }
+  } else {
+    if (!start_date || !end_date) {
+      status.textContent = "Select both custom start and end dates.";
+      status.className = "status bad";
+      return;
+    }
+    if (start_date > end_date) {
+      status.textContent = "Custom start date cannot be after end date.";
+      status.className = "status bad";
+      return;
+    }
+  }
+
+  status.textContent = "Generating monthly activity preview... ⏳";
+  status.className = "status";
+  if (summary) summary.textContent = "";
+  if (downloadBtn) downloadBtn.disabled = true;
+  COMPARE_STATE.activityReportId = null;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/agent-monthly/${window.FILE_ID}/${reportId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        timeframe_mode,
+        month,
+        start_date,
+        end_date,
+        activity_type
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      status.textContent = data.error || `Activity preview failed (${res.status})`;
+      status.className = "status bad";
+      renderActivityPreview([]);
+      return;
+    }
+
+    COMPARE_STATE.activityReportId = data.activity_report_id || null;
+    if (downloadBtn) downloadBtn.disabled = !COMPARE_STATE.activityReportId;
+    renderActivityPreview(data.preview_rows || []);
+
+    const shown = Math.min(Number(data.preview_limit || 0), Number(data.preview_total || 0));
+    const extra = data.preview_total > shown ? ` Showing first ${shown} row(s).` : "";
+    const typeLabel = (data.activity_type || activity_type).toUpperCase();
+    const timeframeLabel = data.timeframe_label || month;
+    status.textContent = "Monthly activity preview ready ✅";
     status.className = "status good";
     if (summary) {
-      if (compared && inactive) {
-        summary.textContent = `Compared ${compared} agent(s). Found ${inactive} inactive/not-found agent(s).`;
-      } else {
-        summary.textContent = "Report downloaded.";
-      }
+      summary.textContent = `${timeframeLabel} | Type: ${typeLabel} | Rows: ${data.total_rows || 0}.${extra}`;
     }
   } catch (err) {
-    clearTimeout(t);
-    status.textContent =
-      err.name === "AbortError"
-        ? "Compare timed out 😭 (backend not responding)"
-        : `Compare crashed: ${err.message}`;
+    status.textContent = `Activity preview failed: ${err.message}`;
+    status.className = "status bad";
+    renderActivityPreview([]);
+  }
+}
+
+async function downloadMonthlyActivityReport() {
+  const status = qs("compareStatus");
+  const reportId = COMPARE_STATE.reportId;
+  const activityReportId = COMPARE_STATE.activityReportId;
+  if (!reportId || !activityReportId) {
+    status.textContent = "Generate monthly activity preview first before downloading.";
+    status.className = "status bad";
+    return;
+  }
+
+  status.textContent = "Preparing monthly activity download... ⏳";
+  status.className = "status";
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/agent-monthly-download/${window.FILE_ID}/${reportId}/${activityReportId}`
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      let data = {};
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+      status.textContent = data.error || `Download failed (${res.status})`;
+      status.className = "status bad";
+      return;
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const filename = parseFilenameFromHeader(disposition) || "agent_monthly_activity.xlsx";
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => window.URL.revokeObjectURL(url), 2000);
+
+    status.textContent = "Monthly activity download started ✅";
+    status.className = "status good";
+  } catch (err) {
+    status.textContent = `Download failed: ${err.message}`;
     status.className = "status bad";
   }
 }
@@ -413,6 +720,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   // agent compare
   if (window.FILE_ID && window.PAGE === "agent_compare") {
     const compareBtn = document.getElementById("compareUploadBtn");
+    const downloadBtn = document.getElementById("compareDownloadBtn");
+    const activityGenerateBtn = document.getElementById("activityGenerateBtn");
+    const activityDownloadBtn = document.getElementById("activityDownloadBtn");
+    const activityTimeframeMode = document.getElementById("activityTimeframeMode");
     if (compareBtn) compareBtn.addEventListener("click", uploadAndCompareAgents);
+    if (downloadBtn) downloadBtn.addEventListener("click", downloadCompareReport);
+    if (activityGenerateBtn) activityGenerateBtn.addEventListener("click", generateMonthlyActivityPreview);
+    if (activityDownloadBtn) activityDownloadBtn.addEventListener("click", downloadMonthlyActivityReport);
+    if (activityTimeframeMode) activityTimeframeMode.addEventListener("change", syncActivityTimeframeControls);
+    syncActivityTimeframeControls();
   }
 });
